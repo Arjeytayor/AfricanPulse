@@ -1,0 +1,128 @@
+"""Configuration — API keys, paths, topics, thresholds."""
+
+import os
+from dotenv import load_dotenv
+
+# Load .env file from project root
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+# ─── API Keys ──────────────────────────────────────────────
+# free-claude-code proxy (NVIDIA NIM → Kimi-K2)
+# The proxy runs at http://127.0.0.1:8082 by default.
+# ANTHROPIC_API_KEY  = proxy auth token (whatever you set as ANTHROPIC_AUTH_TOKEN)
+# ANTHROPIC_BASE_URL = proxy base URL (e.g. http://127.0.0.1:8082)
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "")
+
+# NVIDIA NIM (build.nvidia.com) — primary LLM provider
+NVIDIA_NIM_API_KEY = os.environ.get("NVIDIA_NIM_API_KEY", "")
+NIM_BASE_URL = os.environ.get("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+
+# Optional: Perplexity API key for AI-enhanced research synthesis
+PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
+
+# Telegram delivery
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+# ─── Daily topic list ──────────────────────────────────────
+# Covers global digital assets, macroeconomics, and geopolitics
+DAILY_TOPICS = [
+    # --- DIGITAL ASSETS & CRYPTO ---
+    "Bitcoin price action ETF flows",
+    "Ethereum staking Dencun upgrade",
+    "DeFi TVL trends Uniswap Aave",
+    "stablecoins USDT USDC regulation",
+    "crypto exchange Binance Coinbase",
+    "altcoin market cap dominance",
+    "Bitcoin halving supply impact",
+
+    # --- US MACRO & MONETARY POLICY ---
+    "US Federal Reserve interest rates dot plot",
+    "US inflation CPI PCE data",
+    "US Treasury yields 10-year bond",
+    "US dollar DXY strength",
+    "US unemployment jobs report NFP",
+    "US fiscal deficit debt ceiling",
+
+    # --- EUROPE & UK ---
+    "ECB interest rates eurozone inflation",
+    "UK Bank of England rates GBP",
+    "Euro EURUSD parity outlook",
+    "European energy gas prices",
+
+    # --- ASIA & PACIFIC ---
+    "China economy PBOC stimulus",
+    "Japan BoJ rates yen intervention",
+    "India rupee inflation RBI",
+    "Australia RBA rates AUD",
+    "South Korea won semiconductor exports",
+
+    # --- EMERGING MARKETS ---
+    "Brazil central bank rates BRL",
+    "Mexico Banxico rates peso",
+    "Turkey lira inflation central bank",
+    "South Africa SARB rand rates",
+    "Nigeria naira CBN policy FX",
+
+    # --- COMMODITIES & ENERGY ---
+    "oil prices WTI Brent OPEC",
+    "gold prices safe haven flows",
+    "copper industrial demand China",
+    "lithium EV battery supply",
+    "grain wheat corn Ukraine exports",
+
+    # --- GEOPOLITICS & TRADE ---
+    "trade war tariffs sanctions",
+    "Middle East conflict oil risk",
+    "Taiwan semiconductor geopolitics",
+    "Russia sanctions commodities",
+    "BRICS currency de-dollarisation",
+
+    # --- TRADITIONAL FINANCE ---
+    "banking crisis credit risk",
+    "fintech disruption payments",
+    "cross border remittances corridor",
+    "sovereign debt default risk",
+    "private credit bubble risk",
+]
+
+# ─── Paths ────────────────────────────────────────────────
+BASE_DIR = r"C:\Users\DELL\Documents\AfricanPulse"
+CACHE_DIR = os.path.join(BASE_DIR, "cache")
+L30_CACHE_DIR = os.path.join(BASE_DIR, "cache", "last30days")
+DEEP_DIVE_CACHE_DIR = os.path.join(BASE_DIR, "cache", "deep_dive")
+INDEX_DIR = os.path.join(BASE_DIR, "vector_index")
+OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+
+# ─── Thresholds ───────────────────────────────────────────
+DUPLICATE_THRESHOLD = 0.92   # turbovec similarity score above which a topic is skipped
+MIN_TOPIC_SCORE = 0.3        # minimum combined score to include a topic
+MAX_DAILY_PICKS = 2          # max articles+scripts to generate per day
+DEEP_DIVE_THRESHOLD = 500    # last30days engagement score above which Agent-Reach fires (old behaviour)
+
+# ─── Feature toggles ──────────────────────────────────────
+# Humanizer pass: if True, both original + humanized are saved.
+# If False, only original is produced (humanize step skipped).
+HUMANIZE_DEFAULT = os.environ.get("HUMANIZE", "false").lower() in ("1", "true", "yes")
+
+# Dynamic topic discovery: if True, fetches trending headlines from
+# Google News + Reddit instead of using the static DAILY_TOPICS list.
+# Set via env var or toggle here directly.
+USE_DYNAMIC_TOPICS = os.environ.get("USE_DYNAMIC_TOPICS", "true").lower() in ("1", "true", "yes")
+
+# Publishing toggles — set true to enable auto-posting
+POST_SUBSTACK = os.environ.get("POST_SUBSTACK", "false").lower() in ("1", "true", "yes")
+POST_X = os.environ.get("POST_X", "false").lower() in ("1", "true", "yes")
+
+# ─── Retry settings ──────────────────────────────────────
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0  # seconds
+
+# ─── LLM Settings ────────────────────────────────────────
+# NOTE: If using the NIM proxy, model name is remapped by the proxy.
+# We use a valid Anthropic model string for correctness.
+DEFAULT_MODEL = "claude-sonnet-4-6"  # Proxy remaps this to nvidia_nim/moonshotai/kimi-k2.6
+ARTICLE_MAX_TOKENS = 1500
+SCRIPT_MAX_TOKENS = 600

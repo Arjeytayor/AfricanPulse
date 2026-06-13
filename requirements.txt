@@ -1,0 +1,11 @@
+anthropic>=0.25.0
+openai>=1.30.0  # Moonshot Kimi is OpenAI-compatible
+python-telegram-bot==20.7
+APScheduler==3.10.4
+requests==2.31.0
+sentence-transformers>=2.7.0
+numpy>=1.26.0
+pytz==2024.1
+python-dotenv==1.0.0
+youtube-transcript-api>=0.6.0    # Tier-2 YouTube fallback (no yt-dlp binary needed)
+tweepy>=4.14.0                   # X / Twitter API v2

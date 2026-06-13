@@ -1,0 +1,34 @@
+# ── Environment / Secrets ────────────────────────────────
+.env
+*.env
+secrets.json
+credentials.json
+
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.spec
+
+# ── Generated / Cache ───────────────────────────────────
+cache/
+logs/
+outputs/
+vector_index/
+archive/
+
+# ── IDE / OS ────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Session / Temp ──────────────────────────────────────
+*.log
+*.tmp
+*.bak
