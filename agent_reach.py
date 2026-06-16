@@ -1,4 +1,4 @@
-"""Agent-Reach wrapper — real CLI first, unbreakable fallbacks.
+"""Agent-Reach wrapper -- real CLI first, unbreakable fallbacks.
 
 Hierarchy for every source:
   1. Real CLI tool (installed by agent-reach installer)
@@ -22,7 +22,6 @@ import re
 import shutil
 import subprocess
 from datetime import date
-from html.parser import HTMLParser
 from typing import Final
 
 import requests
@@ -86,8 +85,10 @@ def _run(cmd: list[str], timeout: int = 30) -> str:
         cmd,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
-        shell=False,            # safer & more predictable
+        shell=False,
         check=False,
     )
     if result.returncode != 0:
@@ -110,14 +111,21 @@ def fetch_twitter(query: str, limit: int = 10) -> list[str]:
     source = "unknown"
 
     # ---- Tier 1: real twitter-CLI (installed by agent-reach) ----------
+    # Correct syntax: -n (or --max) for count, --json for JSON output
     if _which("twitter"):
         try:
-            stdout = _run(["twitter", "search", query, "--limit", str(limit)], timeout=30)
-            lines = [ln.strip() for ln in stdout.splitlines() if ln.strip()]
-            if lines:
-                tweets = lines
-                source = "twitter-cli"
-                logger.info(f"Twitter CLI returned {len(tweets)} tweets for '{query}'")
+            stdout = _run(["twitter", "search", query, "-n", str(limit), "--json"], timeout=30)
+            cli_data = json.loads(stdout)
+            # Parse the rich JSON -- extract tweet texts
+            if cli_data.get("ok") and "data" in cli_data:
+                for tweet in cli_data["data"]:
+                    if isinstance(tweet, dict) and tweet.get("text"):
+                        tweets.append(tweet["text"])
+                if tweets:
+                    source = "twitter-cli"
+                    logger.info(f"Twitter CLI returned {len(tweets)} tweets for '{query}'")
+        except json.JSONDecodeError as exc:
+            logger.debug(f"twitter CLI returned non-JSON: {exc}")
         except Exception as exc:
             logger.debug(f"twitter CLI failed: {exc}")
 
@@ -145,7 +153,7 @@ def fetch_twitter(query: str, limit: int = 10) -> list[str]:
     if tweets:
         _save_cache(cache_key, {"tweets": tweets, "source": source})
     else:
-        logger.warning(f"All Twitter methods failed for '{query}' — returning empty list")
+        logger.warning(f"All Twitter methods failed for '{query}' -- returning empty list")
 
     return tweets
 
@@ -160,7 +168,7 @@ def _twitter_json_api(query: str, limit: int) -> list[str]:
             r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
             r.raise_for_status()
             text = re.sub(r"<[^>]+>", " ", r.text)
-            # Extract likely tweet body lines (heuristic: length > 20, < 280)
+            # Extract likely tweet body lines (heuristic: length > 20, < 300)
             candidates = [ln.strip() for ln in text.splitlines() if 20 < len(ln.strip()) < 300]
             tweets = candidates[:limit]
             if tweets:
@@ -207,14 +215,16 @@ def fetch_reddit(query: str, subreddit: str = "", limit: int = 5) -> list[dict]:
     posts: list[dict] = []
     source = "unknown"
 
-    # ---- Tier 1: real rdt-cli (installed by agent-reach) -----------
+    # ---- Tier 1: real rdt-cli (installed by agent-reach) --------
+    # NOTE: rdt requires auth. If unauthenticated, it will fail
+    # and the system will fall back to Tier 2 automatically.
     if _which("rdt"):
         try:
-            cmd = ["rdt", "search", query, "--limit", str(limit)]
+            cmd = ["rdt", "search", query, "--max", str(limit)]
             if subreddit:
                 cmd += ["--subreddit", subreddit]
             stdout = _run(cmd, timeout=30)
-            # rdt-cli outputs JSON lines
+            # rdt-cli may output JSON lines
             lines = [ln for ln in stdout.splitlines() if ln.strip()]
             for line in lines:
                 try:
@@ -225,7 +235,7 @@ def fetch_reddit(query: str, subreddit: str = "", limit: int = 5) -> list[dict]:
                 source = "rdt-cli"
                 logger.info(f"rdt-cli returned {len(posts)} posts for '{query}'")
         except Exception as exc:
-            logger.debug(f"rdt CLI failed: {exc}")
+            logger.debug(f"rdt CLI failed (may need auth): {exc}")
 
     # ---- Tier 2: Reddit JSON API (public, no auth) ------------------
     if not posts:
@@ -241,7 +251,7 @@ def fetch_reddit(query: str, subreddit: str = "", limit: int = 5) -> list[dict]:
     if posts:
         _save_cache(cache_key, {"posts": posts, "source": source})
     else:
-        logger.warning(f"All Reddit methods failed for '{query}' — returning empty list")
+        logger.warning(f"All Reddit methods failed for '{query}' -- returning empty list")
 
     return posts
 
@@ -286,16 +296,28 @@ def fetch_youtube_transcript(url: str) -> str:
     # ---- Tier 1: yt-dlp (installed by agent-reach) ------------------
     if _which("yt-dlp"):
         try:
-            tmp = os.path.join(
-                os.environ.get("TMP", os.path.dirname(__file__)),
-                f"yt_sub_{video_id}",
-            )
+            # Use yt-dlp to list available subtitles first
+            tmp_dir = os.environ.get("TMP", os.path.dirname(__file__))
+            tmp = os.path.join(tmp_dir, f"yt_sub_{video_id}")
+            # Try auto-generated English subtitles first, then regular
             _run(
-                ["yt-dlp", "--write-sub", "--skip-download", "--sub-format", "vtt",
-                 "--output", tmp, url],
+                [
+                    "yt-dlp",
+                    "--write-auto-sub",
+                    "--sub-langs", "en",
+                    "--skip-download",
+                    "--sub-format", "vtt",
+                    "--output", tmp,
+                    url,
+                ],
                 timeout=60,
             )
-            vtt_candidates = [f"{tmp}.en.vtt", f"{tmp}.en-US.vtt"]
+            # yt-dlp writes files like: tmp.en.vtt, tmp.en-US.vtt
+            vtt_candidates = [
+                f"{tmp}.en.vtt",
+                f"{tmp}.en-US.vtt",
+                f"{tmp}.en-GB.vtt",
+            ]
             for vtt_path in vtt_candidates:
                 if os.path.exists(vtt_path):
                     with open(vtt_path, "r", encoding="utf-8") as f:
@@ -311,10 +333,10 @@ def fetch_youtube_transcript(url: str) -> str:
         except Exception as exc:
             logger.debug(f"yt-dlp failed: {exc}")
 
-    # ---- Tier 2: youtube-transcript-api (pip installable) -----------
+    # ---- Tier 2: youtube-transcript-api (pip installable) --------
     if not transcript:
         try:
-            from youtube_transcript_api import YouTubeTranscriptApi  # type: ignore
+            from youtube_transcript_api import YouTubeTranscriptApi
             transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
             transcript = " ".join(seg["text"] for seg in transcript_list)
             source = "youtube-transcript-api"
@@ -322,7 +344,7 @@ def fetch_youtube_transcript(url: str) -> str:
         except Exception as exc:
             logger.debug(f"youtube-transcript-api failed: {exc}")
 
-    # ---- Tier 3: captions from third-party fetch ---------------------
+    # ---- Tier 3: captions from third-party fetch --------------------
     if not transcript:
         try:
             transcript = _youtube_caption_scrape(video_id)
@@ -336,7 +358,7 @@ def fetch_youtube_transcript(url: str) -> str:
     if transcript:
         _save_cache(cache_key, {"transcript": transcript, "source": source})
     else:
-        logger.warning(f"All YouTube methods failed for '{url}' — returning empty string")
+        logger.warning(f"All YouTube methods failed for '{url}' -- returning empty string")
 
     return transcript
 
@@ -394,7 +416,7 @@ def fetch_web_page(url: str) -> str:
     content = ""
     source = "unknown"
 
-    # ---- Tier 1: Jina Reader (what agent-reach uses by default) -----
+    # ---- Tier 1: Jina Reader (what agent-reach uses by default) ----
     try:
         jina_url = f"https://r.jina.ai/{url}"
         r = requests.get(jina_url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
@@ -422,7 +444,7 @@ def fetch_web_page(url: str) -> str:
     if content:
         _save_cache(cache_key, {"content": content, "source": source})
     else:
-        logger.warning(f"All web fetch methods failed for '{url}' — returning empty string")
+        logger.warning(f"All web fetch methods failed for '{url}' -- returning empty string")
 
     return content
 
